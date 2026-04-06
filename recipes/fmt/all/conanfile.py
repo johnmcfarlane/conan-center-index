@@ -96,6 +96,8 @@ class FmtConan(ConanFile):
                 tc.cache_variables["FMT_OS"] = bool(self.options.with_os_api)
             if self._has_with_unicode_option:
                 tc.cache_variables["FMT_UNICODE"] = bool(self.options.with_unicode)
+            tc.cache_variables["FMT_USE_CMAKE_MODULES"] = True
+            tc.cache_variables["CMAKE_CXX_SCAN_FOR_MODULES"] = True
             tc.generate()
 
     def build(self):
@@ -115,13 +117,16 @@ class FmtConan(ConanFile):
         else:
             cmake = CMake(self)
             cmake.install()
-            rmdir(self, os.path.join(self.package_folder, "lib", "cmake"))
-            rmdir(self, os.path.join(self.package_folder, "lib", "pkgconfig"))
-            rmdir(self, os.path.join(self.package_folder, "res"))
-            rmdir(self, os.path.join(self.package_folder, "share"))
+            # rmdir(self, os.path.join(self.package_folder, "lib", "cmake"))
+            # rmdir(self, os.path.join(self.package_folder, "lib", "pkgconfig"))
+            # rmdir(self, os.path.join(self.package_folder, "res"))
+            # rmdir(self, os.path.join(self.package_folder, "share"))
 
     def package_info(self):
         target = "fmt-header-only" if self.options.header_only else "fmt"
+        postfix = "d" if self.settings.build_type == "Debug" else ""
+        libname = "fmt" + postfix
+
         self.cpp_info.set_property("cmake_file_name", "fmt")
         self.cpp_info.set_property("cmake_target_name", f"fmt::{target}")
 
@@ -133,10 +138,12 @@ class FmtConan(ConanFile):
         if is_msvc(self):
             if self.options.get_safe("with_unicode"):
                 self.cpp_info.components["_fmt"].cxxflags.append("/utf-8")
+                self.cpp_info.components["module"].cxxflags.append("/utf-8")
             else:
                 # Set the FMT_UNICODE=0, as defined publicly upstream
                 # https://github.com/fmtlib/fmt/blob/11.1.1/CMakeLists.txt#L371
                 self.cpp_info.components["_fmt"].defines.append("FMT_UNICODE=0")
+                self.cpp_info.components["module"].defines.append("FMT_UNICODE=0")
 
         # TODO: back to global scope in conan v2 once cmake_find_package* generators removed
         if self.options.with_fmt_alias:
@@ -147,12 +154,16 @@ class FmtConan(ConanFile):
             self.cpp_info.components["_fmt"].libdirs = []
             self.cpp_info.components["_fmt"].bindirs = []
         else:
-            postfix = "d" if self.settings.build_type == "Debug" else ""
-            libname = "fmt" + postfix
             self.cpp_info.components["_fmt"].libs = [libname]
             if self.settings.os == "Linux":
                 self.cpp_info.components["_fmt"].system_libs.extend(["m"])
             if self.options.shared:
                 self.cpp_info.components["_fmt"].defines.append("FMT_SHARED")
+                self.cpp_info.components["module"].defines.append("FMT_SHARED")
+
+        self.cpp_info.components["module"].libs = [libname]
+        if self.settings.os == "Linux":
+            self.cpp_info.components["module"].system_libs.extend(["m"])
 
         self.cpp_info.components["_fmt"].set_property("cmake_target_name", f"fmt::{target}")
+        self.cpp_info.components["module"].set_property("cmake_target_name", f"fmt::fmt-module")
